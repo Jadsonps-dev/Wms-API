@@ -749,3 +749,77 @@ class Estrutura:
         finally:
             self.session.close()
             print("Sessão encerrada com sucesso.")
+
+    def execute_notebook(self, notebook_path):
+        try:
+            with open(notebook_path, 'r', encoding='utf-8') as f:
+                notebook_content = nbformat.read(f, as_version=4)
+
+            client = NotebookClient(notebook_content)
+            client.execute()
+
+            print(f"Notebook {notebook_path} executado com sucesso!")
+
+        except Exception as e:
+            print(f"Erro ao executar o notebook {notebook_path}: {e}")
+
+    def upload_sheet(self, spreadsheet_data, force_text=False):
+        def convert_datetime_to_str(x):
+            if isinstance(x, (pd.Timestamp, datetime.datetime, np.datetime64)):
+                return pd.to_datetime(x).strftime('%Y-%m-%d %H:%M:%S')
+            return x
+
+        self.scope = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+
+        self.creds_path = os.path.join(
+            self.get_google_drive_path(), 'ProjectsDeA', 'Service Credentials', 'token.json'
+        )
+
+        creds = ServiceAccountCredentials.from_json_keyfile_name(self.creds_path, self.scope)
+        self.client = gspread.authorize(creds)
+
+        value_input_mode = 'RAW' if force_text else 'USER_ENTERED'
+
+        for spreadsheet_info in spreadsheet_data:
+            sheet = self.client.open_by_key(spreadsheet_info['spreadsheet_id'])
+
+            for aba_gs, arquivo_path in spreadsheet_info['abas_e_csv'].items():
+                ext = os.path.splitext(arquivo_path)[1].lower()
+
+                try:
+                    if ext == '.csv':
+                        df_all = {"DEFAULT": pd.read_csv(arquivo_path)}
+                    else:
+                        excel_file = pd.ExcelFile(arquivo_path)
+                        if aba_gs == 'ALL_SHEETS':
+                            df_all = {aba: pd.read_excel(arquivo_path, sheet_name=aba) for aba in excel_file.sheet_names}
+                        else:
+                            df_all = {aba_gs: pd.read_excel(arquivo_path, sheet_name=excel_file.sheet_names[0])}
+                except Exception as e:
+                    print(f"Erro ao ler o arquivo {arquivo_path}: {e}")
+                    continue
+
+                for aba_nome, df in df_all.items():
+                    df = df.fillna('')
+                    df = df.applymap(convert_datetime_to_str)
+
+                    try:
+                        worksheet = sheet.worksheet(aba_nome)
+                    except gspread.exceptions.WorksheetNotFound:
+                        worksheet = sheet.add_worksheet(title=aba_nome, rows=10000, cols=100)
+                        time.sleep(1)
+
+                    worksheet.clear()
+
+                    try:
+                        worksheet.update(
+                            [df.columns.values.tolist()] + df.values.tolist(),
+                            value_input_option=value_input_mode
+                        )
+                    except Exception as e:
+                        print(f"Erro ao atualizar a aba '{aba_nome}': {e}")
+
+        print("Planilhas atualizadas com sucesso!")
