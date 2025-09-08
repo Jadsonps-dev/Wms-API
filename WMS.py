@@ -81,7 +81,7 @@ class Estrutura:
 
         return response
     
-    def extarir_base_csv(self, file_name, save_path, nome_arquivo=None, id_relatorio=None):
+    def baixar_csv_wms(self, file_name, save_path, nome_arquivo=None, id_relatorio=None):
         file_url = f"http://200.143.168.151:8880/siltwms/tsunami/ExportServlet?ExportedFilename={file_name}"
 
         download_response = requests.get(file_url, headers=self.headers)
@@ -131,110 +131,68 @@ class Estrutura:
         else:
             print(f"Arquivo {nome_original} não encontrado para renomear.")
 
-    def extrair_gerenciador_coletas(self,nome_usuario, senha_usuario, id_armazem, save_path, nome_arquivo=None, show_filter=[0]):
-        
-        response_json = self.login_wms(nome_usuario, senha_usuario, id_armazem=id_armazem).json()
+    def extrair_gerenciador_coletas(self, nome_usuario, senha_usuario, id_armazem, save_path, nome_arquivo=None, show_filter=[0]):
+        try:
+            response_json = self.login_wms(nome_usuario, senha_usuario, id_armazem=id_armazem).json()
 
+            bearer_token = response_json.get('value', {}).get('bearer')
+            self.headers['Authorization'] = f'Bearer {bearer_token}'
 
-        bearer_token = response_json.get('value', {}).get('bearer')
+            grid_id_url = self.link_wms + r'webresources/ColetaService/getGerenciadorColeta'
 
-        self.headers['Authorization'] = f'Bearer {bearer_token}' 
-
-        grid_id_url = self.link_wms + r'webresources/ColetaService/getGerenciadorColeta'
-        
-        grid_id_data = {
-            "idArmazem": id_armazem,
-            "config": {
-                "@class": "SqlQueryResultCsvConfig",
-                "advancedSearch": [],
-                "customWhere": None,
-                "dynamicParameters": None,
-                "filterConfigs": [],
-                "onlyGenerateSql": False,
-                "orderBy": "IDCOLETA DESC",
-                "parameters": None,
-                "queryType": "TABLEID",
-                "scalarTypes": {
-                    "VOLUMESSEPARADOS": "java.lang.Boolean"
-                },
-                "separator": 1,
-                "showAll": True,
-                "showFilter": show_filter,
-                "skip": 0,
-                "sqlQueryLoadMode": "VALUES",
-                "take": 40,
-                "visibleColumnIndex": "IDCOLETA,COLETA,TRANSPORTADORA,TRANSPCONTACTADA,EMBARQUELIBERADO,FINALIZADO,VOLUMESSEPARADOS,CONFVOLUME,QTDEDOCS,TOTALVOLUMES,TOTALVOLUMESCONF,CADASTRO,DTCADASTRO,USUARIOCADASTRO,DTSOLICITACAOCOLETA,NROCOLETATRANSP,NOMECONTATO,VEICULO,MOTORISTA,RGMOTORISTA,MOTORISTAAGREGADO,MODAL,PESOKG,VOLUMEM3,VALORTOTAL,OBSERVACAO,SITUACAO,DTLIBERACAO,DTFINALIZACAO,USUARIOCOLETA,ARQUIVORETORNO,MINUTAIMPRESSA,DATAFINALCONFERENCIA,PERMITECOLETANOTACONSOLIDADORA,DATAIMPRESSAOETIQUETACOLETA,USUARIOIMPETIQUETACOLETA,DATACONFIRMACAOETIQUETACOLETA,USUARIOCONFIRMETIQUETACOLETA"
+            grid_id_data = {
+                "idArmazem": id_armazem,
+                "config": {
+                    "@class": "SqlQueryResultCsvConfig",
+                    "advancedSearch": [],
+                    "customWhere": None,
+                    "dynamicParameters": None,
+                    "filterConfigs": [],
+                    "onlyGenerateSql": False,
+                    "orderBy": "IDCOLETA DESC",
+                    "parameters": None,
+                    "queryType": "TABLEID",
+                    "scalarTypes": {
+                        "VOLUMESSEPARADOS": "java.lang.Boolean"
+                    },
+                    "separator": 1,
+                    "showAll": True,
+                    "showFilter": show_filter,
+                    "skip": 0,
+                    "sqlQueryLoadMode": "VALUES",
+                    "take": 40,
+                    "visibleColumnIndex": ""
+                }
             }
-        }
 
-        grid_id_response = self.session.post(grid_id_url, json=grid_id_data, headers=self.headers)
+            grid_id_response = self.session.post(grid_id_url, json=grid_id_data, headers=self.headers)
 
-        if grid_id_response.status_code == 200:
-            print("Requisição getDinamicGridID bem-sucedida!")
-            grid_id_json = grid_id_response.json()
-            print("Resposta do Grid ID:", grid_id_json)
+            if grid_id_response.status_code == 200:
+                print("Requisição getDinamicGridID bem-sucedida!")
+                grid_id_json = grid_id_response.json()
 
-            value_column_index = grid_id_json.get('config', {}).get('visibleColumnIndex', None)
-            if value_column_index is None:
-                print("visibleColumnIndex não encontrado na resposta!")
+                value_column_index = grid_id_json.get('config', {}).get('visibleColumnIndex', None)
+                if value_column_index:
+                    grid_id_data["config"]["visibleColumnIndex"] = value_column_index
 
-            if value_column_index is not None:
-                grid_id_data["config"]["visibleColumnIndex"] = value_column_index
+                file_path = grid_id_json.get('value', {}).get('filePath')
+                file_name = grid_id_json.get('value', {}).get('fileName')
 
-            file_path = grid_id_json.get('value', {}).get('filePath')
-            file_name = grid_id_json.get('value', {}).get('fileName')
+                if file_path and file_name:
+                    print(f"Arquivo pronto para ser baixado: {file_name}")
 
-            if file_path and file_name:
-                print(f"Arquivo pronto para ser baixado: {file_name}")
-
-                file_url = f"http://200.143.168.151:8880/siltwms/tsunami/ExportServlet?ExportedFilename={file_name}"
-
-                download_response = requests.get(file_url, headers=self.headers)
-
-                if download_response.status_code == 200:
-                    print("Arquivo baixado com sucesso!")
-
-                    file_path = os.path.join(self.google_drive_path, "ProjectsDeA", "ServiceAccountCredentials", "descricao.json")
-                    def obter_nome(id_relatorio):
-                        if os.path.exists(file_path):
-                            with open(file_path, 'r', encoding='utf-8') as file:
-                                nomes = json.load(file)
-                                
-                                for item in nomes:
-                                    if item['idConsultaDinamica'] == id_relatorio:
-                                        return item['descricao']  
-                                return "Relatório não encontrado"  
-                        else:
-                            print("Arquivo 'descricao.json' não encontrado.")
-                            return "Erro ao carregar arquivo"
-
-                    novo_nome = nome_arquivo if nome_arquivo else obter_nome(id)
-
-                    if novo_nome == "Erro ao carregar arquivo":
-                        novo_nome = "arquivo_erro"
-
-                    full_path = os.path.join(save_path, novo_nome + ".csv")
-
-                    save_dir = os.path.dirname(full_path)
-                    if not os.path.exists(save_dir):
-                        os.makedirs(save_dir)
-
-                    with open(full_path, 'wb') as file:
-                        file.write(download_response.content)
-                    print(f"Arquivo salvo em: {full_path}")
-                    
+                    self.baixar_csv_wms(file_name, save_path, nome_arquivo, id_relatorio=id_armazem)
                 else:
-                    print(f"Falha ao baixar o arquivo. Status: {download_response.status_code}")
+                    print("Caminho ou nome do arquivo não encontrado.")
             else:
-                print("Caminho ou nome do arquivo não encontrado.")
-        else:
-            print(f"Falha ao obter Grid ID. Status: {grid_id_response.status_code}")
-            print("Resposta:", grid_id_response.text)
+                print(f"Falha ao obter Grid ID. Status: {grid_id_response.status_code}")
+                print("Resposta:", grid_id_response.text)
 
-    except Exception as e:
-        print(f"Erro crítico: {e}")
-        raise
+        except Exception as e:
+            print(f"Erro crítico: {e}")
+            raise
 
-    finally:
-        self.session.close()
-        print("Sessão encerrada com sucesso.")
+        finally:
+            self.session.close()
+            print("Sessão encerrada com sucesso.")
+
