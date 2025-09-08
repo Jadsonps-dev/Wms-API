@@ -441,3 +441,82 @@ class Estrutura:
         finally:
             self.session.close()
             print("Sessão encerrada com sucesso.")
+
+    def dados_pcp(self, nome_usuario, senha_usuario, id_relatorio, data_inicial, data_final, save_path, nome_arquivo=None):
+        try:
+            response_json = self.login_wms(nome_usuario, senha_usuario).json()
+
+            bearer_token = response_json.get('value', {}).get('bearer')
+            self.headers['Authorization'] = f'Bearer {bearer_token}'
+            print("Login realizado com sucesso!")
+
+            grid_url = self.link_wms + r'webresources/GridService/getDinamicGridID'
+
+            usuario_data = {
+                "id": 6501,
+                "nomeUsuario": "user_1",
+                "senha": "passw_1",
+                "ativo": True,
+                "departamento": "ALPARGATAS",
+                "nomeUsuarioCompleto": "ANDERSON PEREIRA SANTOS",
+                "tipoUsuario": "SUPERVISOR",
+                "utilizaSenhaCaseSensitive": True
+            }
+
+            armazem_data = {
+                "id": 7,
+                "descricao": "LUFT SOLUTIONS - AG2 - CAJAMAR - 16",
+                "codigo": "7",
+                "ativo": True
+            }
+
+            parametros_data = {
+                "DEPOSITANTE": " ",
+                "DtGeracaoInicial": data_inicial,
+                "DtGeracaoFinal": data_final
+            }
+
+            print("Enviando requisição para gerar CSV...")
+
+            csv_payload = {
+                "id": id_relatorio,
+                "armazem": armazem_data,
+                "config": {
+                    "@class": "SqlQueryResultCsvConfig",
+                    "sqlQueryLoadMode": "DEFAULT",
+                    "queryType": "ROWID",
+                    "showAll": True,
+                    "separator": 1,
+                    "dynamicParameters": parametros_data,
+                    "skip": 0,
+                    "take": 100000,
+                    "visibleColumnIndex": ""
+                },
+                "usuario": usuario_data
+            }
+
+            grid_response = self.session.post(grid_url, json=csv_payload, headers=self.headers)
+
+            if grid_response.status_code != 200:
+                print(f"Erro na requisição CSV: {grid_response.status_code} - {grid_response.text}")
+                return
+
+            response_data = grid_response.json()
+            file_name = response_data.get('value', {}).get('fileName')
+
+            if not file_name:
+                print("Arquivo não gerado ou nome não retornado.")
+                return
+
+            print(f"Arquivo gerado: {file_name}")
+
+            self.baixar_csv_wms(file_name, save_path, nome_arquivo, id_relatorio)
+
+        except Exception as e:
+            print(f"❌ Erro crítico: {e}")
+            raise
+
+        finally:
+            self.session.close()
+            print("Sessão encerrada com sucesso.")
+    
