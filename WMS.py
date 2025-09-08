@@ -1,20 +1,16 @@
 import os
-import datetime as dt
-from datetime import date, timedelta
-import pandas as pd
-import numpy as np
-from nbclient import NotebookClient
-from bs4 import BeautifulSoup
+import sys
+import json
 import time
+import gspread
 import warnings
 import datetime
-import gspread
 import requests
-import json
+import numpy as np
+import pandas as pd
+import datetime as dt
+from datetime import date, timedelta
 from oauth2client.service_account import ServiceAccountCredentials
-import sys
-import nbformat
-import sqlite3
 
 warnings.filterwarnings("ignore")
 
