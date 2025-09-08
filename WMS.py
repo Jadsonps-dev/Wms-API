@@ -131,12 +131,13 @@ class Estrutura:
         else:
             print(f"Arquivo {nome_original} não encontrado para renomear.")
 
-    def extrair_gerenciador_coletas(self, nome_usuario, senha_usuario, id_armazem, save_path, nome_arquivo=None, show_filter=[0]):
+    def gerenciador_coletas(self, nome_usuario, senha_usuario, id_armazem, save_path, nome_arquivo=None, show_filter=[0]):
         try:
             response_json = self.login_wms(nome_usuario, senha_usuario, id_armazem=id_armazem).json()
 
             bearer_token = response_json.get('value', {}).get('bearer')
             self.headers['Authorization'] = f'Bearer {bearer_token}'
+            print("Login realizado com sucesso.")
 
             grid_id_url = self.link_wms + r'webresources/ColetaService/getGerenciadorColeta'
 
@@ -187,6 +188,101 @@ class Estrutura:
             else:
                 print(f"Falha ao obter Grid ID. Status: {grid_id_response.status_code}")
                 print("Resposta:", grid_id_response.text)
+
+        except Exception as e:
+            print(f"Erro crítico: {e}")
+            raise
+
+        finally:
+            self.session.close()
+            print("Sessão encerrada com sucesso.")
+
+    def mapa_alocacao(self, nome_usuario, senha_usuario, save_path, nome_arquivo=None, id_relatorio=None, id_armazem=7):
+        from datetime import datetime, timedelta
+
+        try:
+            response_json = self.login_wms(nome_usuario, senha_usuario, id_armazem=id_armazem).json()
+
+            bearer_token = response_json.get('value', {}).get('bearer')
+            self.headers['Authorization'] = f'Bearer {bearer_token}'
+            print("Login realizado com sucesso.")
+
+            grid_id_url = self.link_wms + 'webresources/GerenciadorMapaAlocacaoService/getListaMapaAlocacao'
+
+            now = datetime.now()
+            start_date = now - timedelta(days=30)
+            timestamp_start = int(start_date.timestamp() * 1000)
+            timestamp_end = int(now.timestamp() * 1000)
+
+            grid_id_data = {
+                "idArmazem": id_armazem,
+                "config": {
+                    "@class": "SqlQueryResultCsvConfig",
+                    "advancedSearch": [],
+                    "customWhere": None,
+                    "dynamicParameters": None,
+                    "filterConfigs": [
+                        {
+                            "field": "DEPOSITANTE",
+                            "comparison": None,
+                            "type": "string",
+                            "useAnd": False,
+                            "map": {"value": "alpa%"}
+                        },
+                        {
+                            "field": "DTGERACAOMAPAALOCACAO",
+                            "comparison": "after",
+                            "type": "date",
+                            "useAnd": True,
+                            "map": {"value": timestamp_start}
+                        },
+                        {
+                            "field": "DTGERACAOMAPAALOCACAO",
+                            "comparison": "before",
+                            "type": "date",
+                            "useAnd": True,
+                            "map": {"value": timestamp_end}
+                        }
+                    ],
+                    "onlyGenerateSql": False,
+                    "orderBy": None,
+                    "parameters": None,
+                    "queryType": "ROWID",
+                    "scalarTypes": {},
+                    "separator": 1,
+                    "showAll": True,
+                    "showFilter": [2],
+                    "skip": 0,
+                    "sqlQueryLoadMode": "VALUES",
+                    "take": 40,
+                    "visibleColumnIndex": ""
+                }
+            }
+
+            grid_id_response = self.session.post(grid_id_url, json=grid_id_data, headers=self.headers)
+
+            if grid_id_response.status_code != 200:
+                print(f"Falha ao obter Grid ID. Status: {grid_id_response.status_code}")
+                print("Resposta:", grid_id_response.text)
+                return
+
+            print("Requisição getDinamicGrid bem-sucedida.")
+            grid_id_json = grid_id_response.json()
+
+            value_column_index = grid_id_json.get('config', {}).get('visibleColumnIndex')
+            if value_column_index:
+                grid_id_data["config"]["visibleColumnIndex"] = value_column_index
+
+            file_path = grid_id_json.get('value', {}).get('filePath')
+            file_name = grid_id_json.get('value', {}).get('fileName')
+
+            if not file_path or not file_name:
+                print("Caminho ou nome do arquivo não encontrado.")
+                return
+
+            print(f"Arquivo pronto para ser baixado: {file_name}")
+
+            self.baixar_csv_wms(file_name, save_path, nome_arquivo, id_relatorio=id_relatorio)
 
         except Exception as e:
             print(f"Erro crítico: {e}")
