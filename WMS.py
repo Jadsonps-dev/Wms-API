@@ -593,3 +593,88 @@ class Estrutura:
         finally:
             self.session.close()
             print("Sessão encerrada com sucesso.")
+
+    def dados_relatorios(self, nome_usuario, senha_usuario, id_relatorio, data_inicial, data_final, save_path, nome_arquivo=None):
+        try:
+            response_json = self.login_wms(nome_usuario, senha_usuario).json()
+            bearer_token = response_json.get('value', {}).get('bearer')
+
+            self.headers['Authorization'] = f'Bearer {bearer_token}'
+
+            grid_id_url = self.link_wms + r'webresources/GridService/getDinamicGridID'
+
+            grid_id_data = {
+                "id": id_relatorio,
+                "armazem": {
+                    "id": 7,
+                    "descricao": "LUFT SOLUTIONS - AG2 - CAJAMAR - 16",
+                    "codigo": "7",
+                    "ativo": True
+                },
+                "config": {
+                    "@class": "SqlQueryResultCsvConfig",
+                    "sqlQueryLoadMode": "DEFAULT",
+                    "queryType": "ROWID",
+                    "showAll": True,
+                    "orderBy": None,
+                    "customWhere": None,
+                    "scalarTypes": {
+                        "BUFFER": "java.lang.Boolean",
+                        "LOCALATIVO": "java.lang.Boolean"
+                    },
+                    "showFilter": [],
+                    "filterConfigs": [],
+                    "take": 50,
+                    "skip": 0,
+                    "advancedSearch": [],
+                    "parameters": {
+                        "Data_Inicial": data_inicial,
+                        "Data_Final": data_final,
+                        "Data_Inicio": data_inicial,
+                        "Data_Fim": data_final,
+                        "DataInicial": data_inicial,
+                        "DataFinal": data_final,
+                        "DataInicio": data_inicial,
+                        "DataFim": data_final
+                    },
+                    "onlyGenerateSql": False,
+                    "visibleColumnIndex": "",
+                    "separator": 1
+                },
+                "usuario": {
+                    "id": self.id_token_wms,
+                    "nomeUsuario": LOGINS_WMS[0],
+                    "senha": self.token_senha_wms,
+                    "ativo": True
+                }
+            }
+
+            grid_id_response = self.session.post(grid_id_url, json=grid_id_data, headers=self.headers)
+
+            if grid_id_response.status_code != 200:
+                print(f"Falha ao obter Grid ID. Status: {grid_id_response.status_code}")
+                print("Resposta:", grid_id_response.text)
+                return
+
+            grid_id_json = grid_id_response.json()
+            print("Requisição getDinamicGridID bem-sucedida!")
+            print("Resposta do Grid ID:", grid_id_json)
+
+            file_name = grid_id_json.get('value', {}).get('fileName')
+            file_path = grid_id_json.get('value', {}).get('filePath')
+
+            if not file_name or not file_path:
+                print("Caminho ou nome do arquivo não encontrado.")
+                return
+
+            print(f"Arquivo pronto para ser baixado: {file_name}")
+
+            self.baixar_csv_wms(file_name, save_path, nome_arquivo, id_relatorio)
+
+        except Exception as e:
+            print(f"Erro crítico: {e}")
+            raise
+
+        finally:
+            self.session.close()
+            print("Sessão encerrada com sucesso.")
