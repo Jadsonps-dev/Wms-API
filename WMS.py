@@ -131,7 +131,7 @@ class Estrutura:
         else:
             print(f"Arquivo {nome_original} não encontrado para renomear.")
 
-    def gerenciador_coletas(self, nome_usuario, senha_usuario, id_armazem, save_path, nome_arquivo=None, show_filter=[0]):
+    def gerenciador_coleta(self, nome_usuario, senha_usuario, id_armazem, save_path, nome_arquivo=None, show_filter=[0]):
         try:
             response_json = self.login_wms(nome_usuario, senha_usuario, id_armazem=id_armazem).json()
 
@@ -357,7 +357,7 @@ class Estrutura:
             self.session.close()
             print("Sessão encerrada com sucesso.")
 
-    def gerenciador_volumes(self, nome_usuario, senha_usuario, id_armazem, data_inicial, data_final, save_path, id_relatorio, nome_arquivo=None): 
+    def gerenciador_volume(self, nome_usuario, senha_usuario, id_armazem, data_inicial, data_final, save_path, id_relatorio, nome_arquivo=None): 
         try:
             response_json = self.login_wms(nome_usuario, senha_usuario, id_armazem=id_armazem).json()
             
@@ -442,7 +442,7 @@ class Estrutura:
             self.session.close()
             print("Sessão encerrada com sucesso.")
 
-    def dados_pcp(self, nome_usuario, senha_usuario, id_relatorio, data_inicial, data_final, save_path, nome_arquivo=None):
+    def pcp(self, nome_usuario, senha_usuario, id_relatorio, data_inicial, data_final, save_path, nome_arquivo=None):
         try:
             response_json = self.login_wms(nome_usuario, senha_usuario, id_armazem=id_armazem).json()
 
@@ -520,7 +520,7 @@ class Estrutura:
             self.session.close()
             print("Sessão encerrada com sucesso.")
     
-    def dados_produtividades(self, nome_usuario, senha_usuario, id_relatorio, data_inicial, data_final, save_path, nome_arquivo=None):
+    def produtividade(self, nome_usuario, senha_usuario, id_relatorio, data_inicial, data_final, save_path, nome_arquivo=None):
         try:
             response_json = self.login_wms(nome_usuario, senha_usuario, id_armazem=id_armazem).json()
 
@@ -594,12 +594,13 @@ class Estrutura:
             self.session.close()
             print("Sessão encerrada com sucesso.")
 
-    def dados_relatorios(self, nome_usuario, senha_usuario, id_relatorio, data_inicial, data_final, save_path, nome_arquivo=None):
+    def relatorio(self, nome_usuario, senha_usuario, id_relatorio, data_inicial, data_final, save_path, nome_arquivo=None):
         try:
-            response_json = self.login_wms(nome_usuario, senha_usuario).json()
-            bearer_token = response_json.get('value', {}).get('bearer')
+            response_json = self.login_wms(nome_usuario, senha_usuario, id_armazem=id_armazem).json()
 
+            bearer_token = response_json.get('value', {}).get('bearer')
             self.headers['Authorization'] = f'Bearer {bearer_token}'
+            print("Login Realizado com Sucesso")
 
             grid_id_url = self.link_wms + r'webresources/GridService/getDinamicGridID'
 
@@ -670,6 +671,76 @@ class Estrutura:
             print(f"Arquivo pronto para ser baixado: {file_name}")
 
             self.baixar_csv_wms(file_name, save_path, nome_arquivo, id_relatorio)
+
+        except Exception as e:
+            print(f"Erro crítico: {e}")
+            raise
+
+        finally:
+            self.session.close()
+            print("Sessão encerrada com sucesso.")
+
+    def estoque(self, nome_usuario, senha_usuario, id_depositante, save_path):
+        try:
+            response_json = self.login_wms(nome_usuario, senha_usuario, id_armazem=id_armazem).json()
+
+            bearer_token = response_json.get('value', {}).get('bearer')
+            self.headers['Authorization'] = f'Bearer {bearer_token}'
+            print("Login Realizado com Sucesso")
+
+            consulta_estoque_url = self.link_wms + r'webresources/ConsultaEstoqueService/getConsultaEstoqueLocalPorProduto'
+
+            gerar_csv_data = {
+                "idDepositante": id_depositante,
+                "idArmazem": 7,
+                "config": {
+                    "@class": "SqlQueryResultCsvConfig",
+                    "sqlQueryLoadMode": "VALUES",
+                    "queryType": "TABLEID",
+                    "showAll": True,
+                    "orderBy": None,
+                    "customWhere": None,
+                    "scalarTypes": {
+                        "BUFFER": "java.lang.Boolean",
+                        "LOCALATIVO": "java.lang.Boolean"
+                    },
+                    "separator": 1,
+                    "showFilter": [],
+                    "filterConfigs": [],
+                    "take": 40,
+                    "skip": 0,
+                    "advancedSearch": [],
+                    "parameters": None,
+                    "onlyGenerateSql": False,
+                    "dynamicParameters": None,
+                    "visibleColumnIndex": ""
+                }
+            }
+
+            print("Gerando CSV...")
+            gerar_csv_response = self.session.post(consulta_estoque_url, json=gerar_csv_data, headers=self.headers)
+
+            if gerar_csv_response.status_code != 200:
+                print(f"Falha ao gerar o CSV! Status: {gerar_csv_response.status_code}")
+                return
+
+            print("CSV gerado com sucesso!")
+            gerar_csv_response_json = gerar_csv_response.json()
+
+            value_column_index = gerar_csv_response_json.get('config', {}).get('visibleColumnIndex', None)
+            if value_column_index is None:
+                print("visibleColumnIndex não encontrado na resposta!")
+
+            if value_column_index is not None:
+                gerar_csv_data["config"]["visibleColumnIndex"] = value_column_index
+
+            file_name = gerar_csv_response_json['value'].get('fileName')
+            if not file_name:
+                print("Nome do arquivo CSV não encontrado.")
+                return
+
+            print(f"Baixando o arquivo CSV: {file_name}...")
+            self.baixar_csv_wms(file_name, save_path, nome_arquivo="Estoque Local Por Produto")
 
         except Exception as e:
             print(f"Erro crítico: {e}")
