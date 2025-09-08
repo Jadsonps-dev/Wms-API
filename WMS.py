@@ -444,7 +444,7 @@ class Estrutura:
 
     def dados_pcp(self, nome_usuario, senha_usuario, id_relatorio, data_inicial, data_final, save_path, nome_arquivo=None):
         try:
-            response_json = self.login_wms(nome_usuario, senha_usuario).json()
+            response_json = self.login_wms(nome_usuario, senha_usuario, id_armazem=id_armazem).json()
 
             bearer_token = response_json.get('value', {}).get('bearer')
             self.headers['Authorization'] = f'Bearer {bearer_token}'
@@ -513,10 +513,83 @@ class Estrutura:
             self.baixar_csv_wms(file_name, save_path, nome_arquivo, id_relatorio)
 
         except Exception as e:
-            print(f"❌ Erro crítico: {e}")
+            print(f"Erro crítico: {e}")
             raise
 
         finally:
             self.session.close()
             print("Sessão encerrada com sucesso.")
     
+    def dados_produtividades(self, nome_usuario, senha_usuario, id_relatorio, data_inicial, data_final, save_path, nome_arquivo=None):
+        try:
+            response_json = self.login_wms(nome_usuario, senha_usuario, id_armazem=id_armazem).json()
+
+            bearer_token = response_json.get('value', {}).get('bearer')
+            self.headers['Authorization'] = f'Bearer {bearer_token}'
+            print("Login realizado com sucesso!")
+
+            grid_id_url = self.link_wms + r'webresources/GridService/getDinamicGridID'
+
+            grid_id_data = {
+                "id": id_relatorio,
+                "config": {
+                    "@class": "SqlQueryResultCsvConfig",
+                    "sqlQueryLoadMode": "DEFAULT",
+                    "queryType": "ROWID",
+                    "showAll": True,
+                    "dynamicParameters": {
+                        "Data_Inicial": data_inicial,
+                        "Data_Final": data_final,
+                        "DataInicio": data_inicial,
+                        "DataFim": data_final
+                    },
+                    "parameters": {
+                        "Data_Inicial": data_inicial,
+                        "Data_Final": data_final,
+                        "DataInicio": data_inicial,
+                        "DataFim": data_final
+                    },
+                    "separator": 1,
+                    "take": 100000,
+                    "skip": 0,
+                    "visibleColumnIndex": ""
+                },
+                "armazem": {
+                    "id": 7,
+                    "descricao": "LUFT SOLUTIONS - AG2 - CAJAMAR - 16"
+                },
+                "usuario": {
+                    "id": 6501,
+                    "nomeUsuario": "ANDERSON.SANTOS1"
+                }
+            }
+
+            grid_id_response = self.session.post(grid_id_url, json=grid_id_data, headers=self.headers)
+
+            if grid_id_response.status_code != 200:
+                print(f"Falha ao obter Grid ID. Status: {grid_id_response.status_code}")
+                print("Resposta:", grid_id_response.text)
+                return
+
+            grid_id_json = grid_id_response.json()
+            print("Requisição getDinamicGridID bem-sucedida!")
+            print("Resposta do Grid ID:", grid_id_json)
+
+            file_name = grid_id_json.get('value', {}).get('fileName')
+            file_path = grid_id_json.get('value', {}).get('filePath')
+
+            if not file_name or not file_path:
+                print("Caminho ou nome do arquivo não encontrado.")
+                return
+
+            print(f"Arquivo pronto para ser baixado: {file_name}")
+
+            self.baixar_csv_wms(file_name, save_path, nome_arquivo, id_relatorio)
+
+        except Exception as e:
+            print(f"Erro crítico: {e}")
+            raise
+
+        finally:
+            self.session.close()
+            print("Sessão encerrada com sucesso.")
