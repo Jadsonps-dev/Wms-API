@@ -292,3 +292,67 @@ class Estrutura:
             self.session.close()
             print("Sessão encerrada com sucesso.")
 
+    def acompanhamento_nf(self, nome_usuario, senha_usuario, data_inicial, data_final, save_path, nome_arquivo=None, id_armazem=7):
+        try:
+            response_json = self.login_wms(nome_usuario, senha_usuario, id_armazem=id_armazem).json()
+
+            bearer_token = response_json.get('value', {}).get('bearer')
+            self.headers['Authorization'] = f'Bearer {bearer_token}'
+            print("Login realizado com sucesso.")
+
+            grid_id_url = r'http://200.143.168.151:8880/siltwms/webresources/GridService/getDinamicGrid'
+
+            grid_id_data = {
+                "view": "vt_acompanhamentosaidanf",
+                "config": {
+                    "@class": "SqlQueryResultCsvConfig",
+                    "filterConfigs": [
+                        {"field": "H$STATUSNF", "comparison": "in", "type": "enum", "useAnd": False, "map": {"value": "C"}},
+                        {"field": "MOVESTOQUE", "comparison": None, "type": "string", "useAnd": False, "map": {"value": "S"}},
+                        {"field": "SOLICITACAOCANCELAMENTO", "comparison": None, "type": "string", "useAnd": False, "map": {"value": "0"}},
+                        {"field": "DATACADASTROIMPORTACAO", "comparison": "after", "type": "date", "useAnd": True, "map": {"value": data_inicial}},
+                        {"field": "DATACADASTROIMPORTACAO", "comparison": "before", "type": "date", "useAnd": True, "map": {"value": data_final}},
+                        {"field": "H$IDARMAZEM", "comparison": "eq", "type": "numeric", "useAnd": False, "map": {"value": 7}}
+                    ],
+                    "onlyGenerateSql": False,
+                    "separator": 1,
+                    "showAll": True,
+                    "skip": 0,
+                    "take": 40,
+                    "sqlQueryLoadMode": "VALUES",
+                    "visibleColumnIndex": "IDNOTAFISCAL,IDPRENF,PEDIDO,NOTAFISCAL,TIPONF,SERIE,CLASSIFICACAOTIPOPEDIDO,CODINTCLASSIFICACAOTPPEDIDO,DATAESPERADAEMBARQUE,EMBARQUEPRIORITARIO,STATUSNF,SEPARACAOINICIADA,SEPARACAOCONCLUIDA,CONFERENCIAINICIADA,CONFERENCIACONCLUIDA,PESADA,PROCESSADO,ROTEIRIZADO,TIPOSAIDA,IDROMANEIO,CODROMANEIO,TITULOROMANEIO,OBSERVACAO,CODIGOSERVICO,DESCSERVICOTRANSP,EMBARQUELIBERADO,CARGA,ESTOQUEVERIFICADO,FATURADO,STATUSRETENCAO,DESCRMOTIVO,USUARIORETENCAO,DATAHORARETENCAO,USUARIOLIBERACAORETENCAO,DATAHORALIBRETENCAO,AUDITADO,IMPRESSOENTREGA,REENTREGA,CADASTRADAEM,IMPORTADOEM,USUARIOIMPORTACAO,VERIFICADOEM,ROTEIZADOEM,SEPARADOEM,USUARIOSEPARACAO,CONFERIDOEM,USUARIOCONFERENCIA,PESADOEM,USUARIOPESAGEM,ENVIADOFATURAMENTO,FATURADOEM,IMPRESSOEM,USUARIOIMPRESSAO,CANCELADOEM,COLETADOEM,USUARIOCOLETA,PROCESSADOEM,QTDEPRODUTO,QTDETOTALPRODUTO,QTDEVOLUMES,PESOVOLUMES,PESOTEORICO,CUBAGEMM3,VLRTOTALNF,CNPJDEPOSITANTE,DEPOSITANTE,CNPJEMITENTE,EMITENTE,CNPJCGCDESTINATARIO,DESTINATARIO,CNPJENTREGA,ENTREGA,CNPJTRANSPORTADORA,TRANSPORTADORA,TRANSPREDESPACHO,MOTORISTA,CFOP,OPERACAO,FRETEPORCONTA,PRECARGA,ROTA,USUARIOALTERACAOROTA,DATAALTERACAOROTA,UTILIZAZPL,CODIGORASTREIO,QTDETAREFAS,QTDEOCORRENCIADOCSAIDA,PONTOALERTA,TIPOUSUARIO,TIPOLIBPA,USUARIOPA,DTCRIACAOPA,USUARIOLIBPA,DTLIBERACAOPA,MOVESTOQUE,IDENTIFICADOR,MOTIVOQUARENTENA,IDMOTIVOQUARENTENA,SOLICITACAOCANCELAMENTO,DATASOLICITCANCELAMENTO,UF_DEST,CLASSIFICACAOCLIENTE,PRIORIDADE,PORCENTAGEMCXFECHADA,FURAFILA,RETIRADACONFIRMADA,USUCONFIRMPEDWEB,DATACONFIRMACAOPEDIDOWEB,DATACADASTROIMPORTACAO,DATAIMPORTACAOPDF,PDFIMPORTADO,SEMANARECEBIMENTO,ANORECEBIMENTO,SEMANADISPONIBILIZACAO,ANODISPONIBILIZACAO,IDPEDIDOPAI"
+                }
+            }
+
+            grid_id_response = self.session.post(grid_id_url, json=grid_id_data, headers=self.headers)
+
+            if grid_id_response.status_code != 200:
+                print(f"Falha ao obter Grid ID. Status: {grid_id_response.status_code}")
+                print("Resposta:", grid_id_response.text)
+                return
+
+            print("Requisição getDinamicGridID bem-sucedida.")
+            grid_id_json = grid_id_response.json()
+
+            value_column_index = grid_id_json.get('config', {}).get('visibleColumnIndex')
+            if value_column_index:
+                grid_id_data["config"]["visibleColumnIndex"] = value_column_index
+
+            file_path = grid_id_json.get('value', {}).get('filePath')
+            file_name = grid_id_json.get('value', {}).get('fileName')
+
+            if not file_path or not file_name:
+                print("Caminho ou nome do arquivo não encontrado.")
+                return
+
+            print(f"Arquivo pronto para ser baixado: {file_name}")
+
+            self.baixar_csv_wms(file_name, save_path, nome_arquivo, id_relatorio=7)
+
+        except Exception as e:
+            print(f"Erro crítico: {e}")
+            raise
+
+        finally:
+            self.session.close()
+            print("Sessão encerrada com sucesso.")
