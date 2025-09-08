@@ -91,7 +91,7 @@ class Estrutura:
             return None
 
         def obter_nome(id_relatorio):
-            descricao_path = os.path.join(self.google_drive_path, "ProjectsDeA", "ServiceAccountCredentials", "descricao.json")
+            descricao_path = os.path.join(self.google_drive_path, "ProjectsDeA", "Service Credentials", "descricao.json")
             if os.path.exists(descricao_path):
                 with open(descricao_path, 'r', encoding='utf-8') as f:
                     nomes = json.load(f)
@@ -182,7 +182,7 @@ class Estrutura:
                 if file_path and file_name:
                     print(f"Arquivo pronto para ser baixado: {file_name}")
 
-                    self.baixar_csv_wms(file_name, save_path, nome_arquivo, id_relatorio=id_armazem)
+                    self.baixar_csv_wms(file_name, save_path, nome_arquivo, id_relatorio=id_relatorio)
                 else:
                     print("Caminho ou nome do arquivo não encontrado.")
             else:
@@ -320,7 +320,7 @@ class Estrutura:
                     "skip": 0,
                     "take": 40,
                     "sqlQueryLoadMode": "VALUES",
-                    "visibleColumnIndex": "IDNOTAFISCAL,IDPRENF,PEDIDO,NOTAFISCAL,TIPONF,SERIE,CLASSIFICACAOTIPOPEDIDO,CODINTCLASSIFICACAOTPPEDIDO,DATAESPERADAEMBARQUE,EMBARQUEPRIORITARIO,STATUSNF,SEPARACAOINICIADA,SEPARACAOCONCLUIDA,CONFERENCIAINICIADA,CONFERENCIACONCLUIDA,PESADA,PROCESSADO,ROTEIRIZADO,TIPOSAIDA,IDROMANEIO,CODROMANEIO,TITULOROMANEIO,OBSERVACAO,CODIGOSERVICO,DESCSERVICOTRANSP,EMBARQUELIBERADO,CARGA,ESTOQUEVERIFICADO,FATURADO,STATUSRETENCAO,DESCRMOTIVO,USUARIORETENCAO,DATAHORARETENCAO,USUARIOLIBERACAORETENCAO,DATAHORALIBRETENCAO,AUDITADO,IMPRESSOENTREGA,REENTREGA,CADASTRADAEM,IMPORTADOEM,USUARIOIMPORTACAO,VERIFICADOEM,ROTEIZADOEM,SEPARADOEM,USUARIOSEPARACAO,CONFERIDOEM,USUARIOCONFERENCIA,PESADOEM,USUARIOPESAGEM,ENVIADOFATURAMENTO,FATURADOEM,IMPRESSOEM,USUARIOIMPRESSAO,CANCELADOEM,COLETADOEM,USUARIOCOLETA,PROCESSADOEM,QTDEPRODUTO,QTDETOTALPRODUTO,QTDEVOLUMES,PESOVOLUMES,PESOTEORICO,CUBAGEMM3,VLRTOTALNF,CNPJDEPOSITANTE,DEPOSITANTE,CNPJEMITENTE,EMITENTE,CNPJCGCDESTINATARIO,DESTINATARIO,CNPJENTREGA,ENTREGA,CNPJTRANSPORTADORA,TRANSPORTADORA,TRANSPREDESPACHO,MOTORISTA,CFOP,OPERACAO,FRETEPORCONTA,PRECARGA,ROTA,USUARIOALTERACAOROTA,DATAALTERACAOROTA,UTILIZAZPL,CODIGORASTREIO,QTDETAREFAS,QTDEOCORRENCIADOCSAIDA,PONTOALERTA,TIPOUSUARIO,TIPOLIBPA,USUARIOPA,DTCRIACAOPA,USUARIOLIBPA,DTLIBERACAOPA,MOVESTOQUE,IDENTIFICADOR,MOTIVOQUARENTENA,IDMOTIVOQUARENTENA,SOLICITACAOCANCELAMENTO,DATASOLICITCANCELAMENTO,UF_DEST,CLASSIFICACAOCLIENTE,PRIORIDADE,PORCENTAGEMCXFECHADA,FURAFILA,RETIRADACONFIRMADA,USUCONFIRMPEDWEB,DATACONFIRMACAOPEDIDOWEB,DATACADASTROIMPORTACAO,DATAIMPORTACAOPDF,PDFIMPORTADO,SEMANARECEBIMENTO,ANORECEBIMENTO,SEMANADISPONIBILIZACAO,ANODISPONIBILIZACAO,IDPEDIDOPAI"
+                    "visibleColumnIndex": ""
                 }
             }
 
@@ -347,7 +347,92 @@ class Estrutura:
 
             print(f"Arquivo pronto para ser baixado: {file_name}")
 
-            self.baixar_csv_wms(file_name, save_path, nome_arquivo, id_relatorio=7)
+            self.baixar_csv_wms(file_name, save_path, nome_arquivo, id_relatorio=id_relatorio)
+
+        except Exception as e:
+            print(f"Erro crítico: {e}")
+            raise
+
+        finally:
+            self.session.close()
+            print("Sessão encerrada com sucesso.")
+
+    def gerenciador_volumes(self, nome_usuario, senha_usuario, id_armazem, data_inicial, data_final, save_path, id_relatorio, nome_arquivo=None): 
+        try:
+            response_json = self.login_wms(nome_usuario, senha_usuario, id_armazem=id_armazem).json()
+            
+            bearer_token = response_json.get('value', {}).get('bearer')
+            self.headers['Authorization'] = f'Bearer {bearer_token}'
+            print("Login realizado com sucesso.")
+
+            grid_id_url = self.link_wms + r'webresources/GerenciadorVolumeService/getGerenciadorVolume'
+
+            grid_id_data = {
+                "idArmazem": id_armazem,
+                "config": {
+                    "@class": "SqlQueryResultCsvConfig",
+                    "sqlQueryLoadMode": "VALUES",
+                    "queryType": "ROWID",
+                    "showAll": True,
+                    "advancedSearch": [],
+                    "customWhere": None,
+                    "dynamicParameters": None,
+                    "filterConfigs": [
+                        {
+                            "field": "H$STATUSNOTA",
+                            "comparison": "in",
+                            "type": "enum",
+                            "useAnd": False,
+                            "map": {"value": "C"}
+                        },
+                        {
+                            "field": "DTGERACAO",
+                            "comparison": "after",
+                            "type": "date",
+                            "useAnd": True,
+                            "map": {"value": data_inicial}
+                        },
+                        {
+                            "field": "DTGERACAO",
+                            "comparison": "before",
+                            "type": "date",
+                            "useAnd": True,
+                            "map": {"value": data_final}
+                        }
+                    ],
+                    "onlyGenerateSql": False,
+                    "orderBy": None,
+                    "parameters": None,
+                    "scalarTypes": {
+                        "H$TIPO": "java.lang.Long",
+                        "UTILIZAZPL": "java.lang.Boolean"
+                    },
+                    "separator": 1,
+                    "showFilter": [0],
+                    "skip": 0,
+                    "take": 40,
+                    "visibleColumnIndex": ""
+                }
+            }
+
+            grid_id_response = self.session.post(grid_id_url, json=grid_id_data, headers=self.headers)
+
+            if grid_id_response.status_code == 200:
+                print("Requisição getGerenciadorVolume bem-sucedida!")
+                grid_id_json = grid_id_response.json()
+
+                file_name = grid_id_json.get('value', {}).get('fileName')
+                file_path = grid_id_json.get('value', {}).get('filePath')
+
+                if file_name and file_path:
+                    print(f"Arquivo pronto para ser baixado: {file_name}")
+
+                    self.baixar_csv_wms(file_name, save_path, nome_arquivo, id_relatorio)
+                else:
+                    print("Caminho ou nome do arquivo não encontrado.")
+            else:
+                print(f"Falha ao obter Grid ID. Status: {grid_id_response.status_code}")
+                print("Resposta:", grid_id_response.text)
 
         except Exception as e:
             print(f"Erro crítico: {e}")
